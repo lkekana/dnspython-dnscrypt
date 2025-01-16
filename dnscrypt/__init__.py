@@ -226,7 +226,6 @@ class Resolver(object):
         try:
             (_, expiration) = dns.query._compute_times(timeout)
             s.setblocking(0)
-            begin_time = time.time()
             if source is not None:
                 s.bind(source)
             dns.query._connect(s, destination)
@@ -253,7 +252,7 @@ class Resolver(object):
             ignore_unexpected=False, one_rr_per_rrset=False):
         wire = self.__encrypt_query(query)
         (af, destination, source) = dns.query._destination_and_source(
-            af, self.address, self.port, source, source_port)
+            self.address, self.port, source, source_port)
 
         s = dns.query.socket_factory(af, socket.SOCK_DGRAM)
         begin_time = None
@@ -267,7 +266,7 @@ class Resolver(object):
             s.sendto(wire, destination)
             while 1:
                 dns.query._wait_for_readable(s, expiration)
-                (wire, from_address) = s. recvfrom(65535)
+                (wire, from_address) = s.recvfrom(65535)
                 if dns.query._addresses_equal(af, from_address, destination) \
                    or (is_multicast(self.address) and
                        from_address[1:] == destination[1:]):
