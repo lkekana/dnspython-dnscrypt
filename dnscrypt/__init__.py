@@ -30,7 +30,7 @@ import dns.query
 import dns.rdatatype
 import dns.rdataclass
 import dns.resolver
-from dns._compat import string_types
+from dns.exception import Timeout, FormError
 
 from nacl.public import PrivateKey, PublicKey, Box
 from nacl.signing import VerifyKey
@@ -139,13 +139,13 @@ class Resolver(object):
 
     def query(self, qname, rdtype=1, rdclass=1, tcp=False, source=None,
               raise_on_no_answer=True, source_port=0):
-        if isinstance(qname, string_types):
+        if isinstance(qname, str):
             qname = dns.name.from_text(qname, None)
-        if isinstance(rdtype, string_types):
+        if isinstance(rdtype, str):
             rdtype = dns.rdatatype.from_text(rdtype)
         if dns.rdatatype.is_metatype(rdtype):
             raise dns.resolver.NoMetaqueries
-        if isinstance(rdclass, string_types):
+        if isinstance(rdclass, str):
             rdclass = dns.rdataclass.from_text(rdclass)
         if dns.rdataclass.is_metaclass(rdclass):
             raise dns.resolver.NoMetaqueries
