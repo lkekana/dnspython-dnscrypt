@@ -329,5 +329,14 @@ class Resolver(object):
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO)
-    Resolver('208.67.220.220', '2.dnscrypt-cert.opendns.com', 'B735:1140:206F:225D:3E2B:D822:D7FD:691E:A1C3:3CC8:D666:8D0C:BE04:BFAB:CA43:FB79', port=443).query('google.com')
-    Resolver('146.185.167.43', '2.dnscrypt-cert.securedns.eu', '2.dnscrypt-cert.securedns.eu', port=5353)
+    Resolver(
+        '208.67.220.220',
+        '2.dnscrypt-cert.opendns.com',
+        'B735:1140:206F:225D:3E2B:D822:D7FD:691E:A1C3:3CC8:D666:8D0C:BE04:BFAB:CA43:FB79',
+        port=443
+    ).query('google.com')
+    
+    # i think this was intended to be a test that's expected to fail
+    Resolver('146.185.167.43', '2.dnscrypt-cert.securedns.eu',
+             '2.dnscrypt-cert.securedns.eu', port=5353)
+
