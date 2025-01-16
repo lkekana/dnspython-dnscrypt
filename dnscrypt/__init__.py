@@ -224,7 +224,7 @@ class Resolver(object):
         s = dns.query.socket_factory(af, socket.SOCK_STREAM)
         begin_time = None
         try:
-            expiration = dns.query._compute_expiration(timeout)
+            (_, expiration) = dns.query._compute_times(timeout)
             s.setblocking(0)
             begin_time = time.time()
             if source is not None:
@@ -258,7 +258,7 @@ class Resolver(object):
         s = dns.query.socket_factory(af, socket.SOCK_DGRAM)
         begin_time = None
         try:
-            expiration = dns.query._compute_expiration(timeout)
+            (_, expiration) = dns.query._compute_times(timeout)
             s.setblocking(0)
             if source is not None:
                 s.bind(source)
