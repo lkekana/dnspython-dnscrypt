@@ -69,8 +69,7 @@ class Resolver(object):
         except Exception:
             # assume this means we have an address instead of a public key
             try:
-                answer = dns.resolver.query(
-                    provider_pk, rdtype=dns.rdatatype.TXT)
+                answer = dns.resolver.resolve(provider_pk, rdtype=dns.rdatatype.TXT)
                 fp = b''.join(answer.response.answer[0][0].strings)
                 vk = VerifyKey(fp.decode('ascii').replace(':', '').lower(),
                                nacl.encoding.HexEncoder)
