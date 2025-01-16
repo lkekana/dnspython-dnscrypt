@@ -17,19 +17,19 @@
 
 """dnspython compatible DNSCrypt library"""
 
-import time
+from time import time
 import logging
 import socket
 import struct
 from typing import Optional, Union
 
-import dns.flags
+from dns.flags import TC
 from dns.inet import is_multicast
 import dns.name
 import dns.message
 from dns.message import QueryMessage
 import dns.query
-import dns.rcode
+from dns.rcode import YXDOMAIN, NXDOMAIN
 import dns.rdatatype
 import dns.rdataclass
 import dns.resolver
@@ -37,8 +37,8 @@ from dns.exception import Timeout, FormError
 
 from nacl.public import PrivateKey, PublicKey, Box
 from nacl.signing import VerifyKey
-import nacl.utils
-import nacl.exceptions
+from nacl.utils import random
+from nacl.exceptions import BadSignatureError
 from nacl.encoding import HexEncoder
 
 DNSCRYPT_MINIMUM_SIZE = 256
@@ -92,7 +92,7 @@ class Resolver(object):
         try:
             answer = dns.query.udp(question, self.address, port=self.port,
                                    timeout=self.timeout)
-            if answer.flags & dns.flags.TC:
+            if answer.flags & TC:
                 answer = dns.query.tcp(question, self.address, port=self.port,
                                        timeout=self.timeout)
         except Timeout:
@@ -101,38 +101,38 @@ class Resolver(object):
             answer = dns.query.tcp(question, self.address, port=self.port,
                                    timeout=self.timeout)
 
-        now = time.time()
+        now = time()
         for possible in answer.answer[0]:
             possible = b''.join(possible.strings)
             logging.debug('Possible cert %s' % possible.hex())
             (magic, es_version, minor_version, signed) = \
                 struct.unpack('!4sHH%ss' % (len(possible) - 8), possible)
 
-            logging.debug('Crytpo version %s' % es_version)
+            logging.debug('Crypto version %s' % es_version)
 
             if magic != DNSCRYPT_CERT_MAGIC:
-                logging.warn('Bad certificate magic: %s' % magic)
+                logging.warning('Bad certificate magic: %s' % magic)
                 continue
 
             if es_version != 1:
-                logging.warn('Not using es_version 1')
+                logging.warning('Not using es_version 1')
                 continue
 
             try:
                 data = vk.verify(signed)
-            except nacl.exceptions.BadSignatureError:
-                logging.warn('Signature did not match')
+            except BadSignatureError:
+                logging.warning('Signature did not match')
                 continue
 
             (pk, client_magic, serial, start, expire, _) = \
                 struct.unpack('!32s8sIII%ss' % (len(data) - 52), data)
 
             if start > now:
-                logging.warn('Certification not yet valid: %s' % start)
+                logging.warning('Certification not yet valid: %s' % start)
                 continue
 
             if expire < now:
-                logging.warn('Certificate expired %s' % expire)
+                logging.warning('Certificate expired %s' % expire)
                 continue
 
             if self.serial is None or serial > self.serial:
@@ -182,7 +182,7 @@ class Resolver(object):
             else:
                 response = self.udp(query, timeout=self.timeout, source=source,
                                     source_port=source_port)
-                if response.flags & dns.flags.TC:
+                if response.flags & TC:
                     tcp_attempt = True
                     response = self.tcp(query, timeout=self.timeout,
                                         source=source, source_port=source_port)
@@ -194,9 +194,9 @@ class Resolver(object):
                              response)])
 
         rcode = response.rcode()
-        if rcode == dns.rcode.YXDOMAIN:
+        if rcode == YXDOMAIN:
             raise dns.resolver.YXDOMAIN()
-        elif rcode == dns.rcode.NXDOMAIN:
+        elif rcode == NXDOMAIN:
             raise dns.resolver.NXDOMAIN(qnames=[qname], responses=[response])
 
         return dns.resolver.Answer(qname, rdtype, rdclass, response,
@@ -217,7 +217,7 @@ class Resolver(object):
         if padding:
             message += b'\x80' + b'\x00' * padding
 
-        nonce = nacl.utils.random(DNSCRYPT_NONCE_SIZE)
+        nonce = random(DNSCRYPT_NONCE_SIZE)
         encrypted = self.__secretbox.encrypt(
             message, nonce + b'\x00' * DNSCRYPT_NONCE_SIZE)
         # Remove the server nonce
@@ -269,7 +269,7 @@ class Resolver(object):
             if begin_time is None:
                 response_time = 0
             else:
-                response_time = time.time() - begin_time
+                response_time = time() - begin_time
             s.close()
 
         r = self.__decrypt_response(wire, one_rr_per_rrset)
@@ -300,7 +300,7 @@ class Resolver(object):
             if source is not None:
                 s.bind(source)
             dns.query._wait_for_writable(s, expiration)
-            begin_time = time.time()
+            begin_time = time()
             s.sendto(wire, destination)
             while 1:
                 dns.query._wait_for_readable(s, expiration)
@@ -311,13 +311,12 @@ class Resolver(object):
                     break
                 if not ignore_unexpected:
                     raise dns.query.UnexpectedSource(
-                        'got a response from %s instead of %s' % (from_address,
-                                                                  destination))
+                        f'got a response from {from_address} instead of {destination}')
         finally:
             if begin_time is None:
                 response_time = 0
             else:
-                response_time = time.time() - begin_time
+                response_time = time() - begin_time
             s.close()
 
         r = self.__decrypt_response(wire, one_rr_per_rrset)
