@@ -1,6 +1,7 @@
 # /usr/bin/env python3
 #
 # Copyright (C) 2017 Brian Hartvigsen
+# Copyright (C) 2025 Lesedi Kekana
 #
 # Permission to use, copy, modify, and/or distribute this software for any
 # purpose with or without fee is hereby granted, provided that the above
@@ -16,20 +17,20 @@
 
 from distutils.core import setup
 
-version = '2.0.0'
+version = '2.1.0'
 
 setup(name='dnscrypt',
       version=version,
-      maintainer='Brian Hartvigsen',
-      maintainer_email='bhartvigsen@opendns.com',
+      maintainer='Brian Hartvigsen and Lesedi Kekana',
+      maintainer_email='bhartvigsen@opendns.com / lesedikekana84@gmail.com',
       description='dnspython compatible DNSCrypt Resolver',
       url="https://github.com/tresni/dnspython-dnscrypt",
       long_description=open('README.rst').read(),
       license='ISC',
       packages=['dnscrypt', ],
-      install_requires=['dnspython >= 1.15.0',
-                        'PyNaCl >= 1.2.1'],
+      install_requires=['dnspython >= 2.7.0',
+                        'PyNaCl >= 1.5.0'],
       classifiers=[
           "Programming Language :: Python :: 3",
-          "Programming Language :: Python :: 3.4"
+          "Programming Language :: Python :: 3.9"
       ])
