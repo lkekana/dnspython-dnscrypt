@@ -21,12 +21,15 @@ import time
 import logging
 import socket
 import struct
+from typing import Optional, Union
 
 import dns.flags
 from dns.inet import is_multicast
 import dns.name
 import dns.message
+from dns.message import QueryMessage
 import dns.query
+import dns.rcode
 import dns.rdatatype
 import dns.rdataclass
 import dns.resolver
@@ -36,6 +39,7 @@ from nacl.public import PrivateKey, PublicKey, Box
 from nacl.signing import VerifyKey
 import nacl.utils
 import nacl.exceptions
+from nacl.encoding import HexEncoder
 
 DNSCRYPT_MINIMUM_SIZE = 256
 DNSCRYPT_MODULO_SIZE = 64
@@ -45,34 +49,41 @@ DNSCRYPT_CERT_MAGIC = b'DNSC'
 
 
 class Resolver(object):
-    def __init__(self, address, provider_name, provider_pk, private_key=None,
-                 port=53, timeout=5):
-        self.address = address
-        self.port = port
-        self.publickey = None
-        self.serial = None
-        self.tcp_only = False
-        self.timeout = timeout
+    def __init__(
+        self,
+        address: str,
+        provider_name: str,
+        provider_pk: str,
+        private_key: Optional[str] = None,
+        port: int = 53,
+        timeout: float = 5
+    ) -> None:
+        self.address: str = address
+        self.port: int = port
+        self.publickey: Optional[PublicKey] = None
+        self.serial: Optional[int] = None
+        self.tcp_only: bool = False
+        self.timeout: float = timeout
 
         if not private_key:
-            self.private = PrivateKey.generate()
+            self.private: PrivateKey = PrivateKey.generate()
             logging.info('Private Key: %s' %
-                self.private.encode(nacl.encoding.HexEncoder))  # noqa
+                self.private.encode(HexEncoder))  # noqa
             logging.info('Public Key : %s' %
-                self.private.public_key.encode(nacl.encoding.HexEncoder))  # noqa
+                self.private.public_key.encode(HexEncoder))  # noqa
         else:
-            self.private = PrivateKey(private_key, nacl.encoding.HexEncoder)
+            self.private: PrivateKey = PrivateKey(private_key, HexEncoder)
 
         try:
-            vk = VerifyKey(provider_pk.replace(':', '').lower(),
-                           nacl.encoding.HexEncoder)
+            vk: VerifyKey = VerifyKey(provider_pk.replace(':', '').lower(),
+                                      HexEncoder)
         except Exception:
             # assume this means we have an address instead of a public key
             try:
                 answer = dns.resolver.resolve(provider_pk, rdtype=dns.rdatatype.TXT)
                 fp = b''.join(answer.response.answer[0][0].strings)
                 vk = VerifyKey(fp.decode('ascii').replace(':', '').lower(),
-                               nacl.encoding.HexEncoder)
+                               HexEncoder)
             except Exception:
                 raise TypeError('No valid public key for %s' % provider_name)
 
@@ -84,7 +95,7 @@ class Resolver(object):
             if answer.flags & dns.flags.TC:
                 answer = dns.query.tcp(question, self.address, port=self.port,
                                        timeout=self.timeout)
-        except dns.exception.Timeout:
+        except Timeout:
             logging.debug('Failed over UDP, trying TCP')
             self.tcp_only = True
             answer = dns.query.tcp(question, self.address, port=self.port,
@@ -134,10 +145,18 @@ class Resolver(object):
                             (self.address, self.port, provider_name))
 
         logging.info('Selected certificate %s' % self.serial)
-        self.__secretbox = Box(self.private, self.publickey)
+        self.__secretbox: Box = Box(self.private, self.publickey)
 
-    def query(self, qname, rdtype=1, rdclass=1, tcp=False, source=None,
-              raise_on_no_answer=True, source_port=0):
+    def query(
+        self,
+        qname: Union[dns.name.Name, str],
+        rdtype: Union[dns.rdatatype.RdataType, str] = dns.rdatatype.A,
+        rdclass: Union[dns.rdataclass.RdataClass, str] = dns.rdataclass.IN,
+        tcp: bool = False,
+        source: Optional[str] = None,
+        raise_on_no_answer: bool = True,
+        source_port: int = 0
+    ) -> dns.resolver.Answer:
         if isinstance(qname, str):
             qname = dns.name.from_text(qname, None)
         if isinstance(rdtype, str):
@@ -152,7 +171,7 @@ class Resolver(object):
         if not qname.is_absolute():
             qname = qname.concatenate(dns.name.root)
 
-        query = dns.message.make_query(qname, rdtype=rdtype, rdclass=rdclass)
+        query: QueryMessage = dns.message.make_query(qname, rdtype=rdtype, rdclass=rdclass)
         response = None
         try:
             tcp_attempt = False
@@ -167,7 +186,7 @@ class Resolver(object):
                     tcp_attempt = True
                     response = self.tcp(query, timeout=self.timeout,
                                         source=source, source_port=source_port)
-        except (socket.error, dns.exception.Timeout, dns.exception.FormError,
+        except (socket.error, Timeout, FormError,
                 dns.query.UnexpectedSource, EOFError) as ex:
                 raise dns.resolver.NoNameservers(
                     request=query,
@@ -183,7 +202,7 @@ class Resolver(object):
         return dns.resolver.Answer(qname, rdtype, rdclass, response,
                                    raise_on_no_answer)
 
-    def __encrypt_query(self, query):
+    def __encrypt_query(self, query: QueryMessage) -> bytes:
         message = query.to_wire()
 
         # Technically for TCP there is no requirement for DNSCRYPT_MINIMUM_SIZE
@@ -205,7 +224,11 @@ class Resolver(object):
         encrypted = encrypted[0:12] + encrypted[24:]
         return self.client_magic + self.private.public_key.encode() + encrypted
 
-    def __decrypt_response(self, wire, one_rr_per_rrset):
+    def __decrypt_response(
+        self,
+        wire: bytes,
+        one_rr_per_rrset: bool
+    ) -> dns.message.Message:
         (magic, nonce, data) = struct.unpack('!8s24s%ss' %
                                              (len(wire) - 32), wire)
         if magic != DNSCRYPT_RESOLVER_MAGIC:
@@ -216,8 +239,15 @@ class Resolver(object):
         return dns.message.from_wire(payload, ignore_trailing=True,
                                      one_rr_per_rrset=one_rr_per_rrset)
 
-    def tcp(self, query, timeout=None, af=None, source=None, source_port=0,
-            one_rr_per_rrset=False):
+    def tcp(
+        self,
+        query: QueryMessage,
+        timeout: Optional[float] = None,
+        af: Optional[int] = None,
+        source: Optional[str] = None,
+        source_port: int = 0,
+        one_rr_per_rrset: bool = False
+    ) -> dns.message.Message:
         wire = self.__encrypt_query(query)
         (af, destination, source) = dns.query._destination_and_source(
             af, self.address, self.port, source, source_port)
@@ -248,8 +278,16 @@ class Resolver(object):
             raise dns.query.BadResponse
         return r
 
-    def udp(self, query, timeout=None, af=None, source=None, source_port=0,
-            ignore_unexpected=False, one_rr_per_rrset=False):
+    def udp(
+        self,
+        query: QueryMessage,
+        timeout: Optional[float] = None,
+        af: Optional[int] = None,
+        source: Optional[str] = None,
+        source_port: int = 0,
+        ignore_unexpected: bool = False,
+        one_rr_per_rrset: bool = False
+    ) -> dns.message.Message:
         wire = self.__encrypt_query(query)
         (af, destination, source) = dns.query._destination_and_source(
             self.address, self.port, source, source_port)
