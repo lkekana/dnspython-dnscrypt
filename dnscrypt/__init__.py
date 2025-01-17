@@ -42,6 +42,8 @@ from nacl.utils import random
 from nacl.exceptions import BadSignatureError
 from nacl.encoding import HexEncoder
 
+import regex
+
 DNSCRYPT_MINIMUM_SIZE = 256
 DNSCRYPT_MODULO_SIZE = 64
 DNSCRYPT_NONCE_SIZE = 12
@@ -65,6 +67,11 @@ class Resolver(object):
         self.serial: Optional[int] = None
         self.tcp_only: bool = False
         self.timeout: float = timeout
+
+        # if address has port at the end, fix address and port
+        if regex.match(r'^(?:[0-9]{1,3}\.){3}[0-9]{1,3}:[0-9]{1,5}$', address):
+            self.address, self.port = address.split(':')
+            self.port = int(self.port)
 
         if not private_key:
             self.private: PrivateKey = PrivateKey.generate()
@@ -90,7 +97,9 @@ class Resolver(object):
 
         question = dns.message.make_query(
             provider_name, rdtype=dns.rdatatype.TXT)
+        # print("Question: " + str(question))
         try:
+            # print((str(question), self.address, self.port, self.timeout))
             answer = dns.query.udp(question, self.address, port=self.port,
                                    timeout=self.timeout)
             if answer.flags & TC:
