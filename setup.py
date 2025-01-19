@@ -20,17 +20,21 @@ from distutils.core import setup
 version = '2.1.0'
 
 setup(name='dnscrypt',
-      version=version,
-      maintainer='Brian Hartvigsen and Lesedi Kekana',
-      maintainer_email='bhartvigsen@opendns.com / lesedikekana84@gmail.com',
-      description='dnspython compatible DNSCrypt Resolver',
-      url="https://github.com/lkekana/dnspython-dnscrypt",
-      long_description=open('README.rst').read(),
-      license='ISC',
-      packages=['dnscrypt', ],
-      install_requires=['dnspython >= 2.7.0',
-                        'PyNaCl >= 1.5.0'],
-      classifiers=[
-          "Programming Language :: Python :: 3",
-          "Programming Language :: Python :: 3.9"
-      ])
+    version=version,
+    maintainer='Brian Hartvigsen and Lesedi Kekana',
+    maintainer_email='bhartvigsen@opendns.com / lesedikekana84@gmail.com',
+    description='dnspython compatible DNSCrypt Resolver',
+    url="https://github.com/lkekana/dnspython-dnscrypt",
+    long_description=open('README.rst').read(),
+    license='ISC',
+    packages=['dnscrypt'],
+    install_requires=[
+        'dnspython >= 2.7.0',
+        'PyNaCl >= 1.5.0',
+        'cffi == 1.17.1',
+        'pycparser == 2.22',
+    ],
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.9"
+    ])
